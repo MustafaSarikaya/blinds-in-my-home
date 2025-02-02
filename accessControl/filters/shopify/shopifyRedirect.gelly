@@ -1,0 +1,3 @@
+filter ($session: Session) on ShopifyRedirect [
+  where shopId == $session.shopId
+]

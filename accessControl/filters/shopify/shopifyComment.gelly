@@ -1,0 +1,3 @@
+filter ($session: Session) on ShopifyComment [
+  where shopId == $session.shopId
+]
