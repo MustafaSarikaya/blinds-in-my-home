@@ -7,8 +7,8 @@ network_access = true
 
 [[extensions]]
 type = "theme"
-name = "Curtain Visualizer"
-handle = "curtain-visualizer"
+name = "Blinds in My Home"
+handle = "blinds-in-my-home"
 
 # Define extension points
 [[extensions.targeting]]

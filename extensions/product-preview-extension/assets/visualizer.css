@@ -11,6 +11,7 @@
   cursor: pointer;
   font-size: 16px;
   transition: background-color 0.3s;
+  justify-content: center;
 }
 
 .curtain-visualizer__button:hover {
