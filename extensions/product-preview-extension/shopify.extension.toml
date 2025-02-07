@@ -1,0 +1,8 @@
+name = "product-preview-extension"
+type = "theme"
+
+# Gives your extension access to make external network calls, using the
+# JavaScript `fetch()` API. Learn more:
+# https://shopify.dev/docs/api/checkout-ui-extensions/unstable/configuration#network-access
+network_access = true
+
