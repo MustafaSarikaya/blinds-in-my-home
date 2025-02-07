@@ -1,8 +1,30 @@
 name = "product-preview-extension"
 type = "theme"
+description = "Visualize curtains in your space using AI"
 
-# Gives your extension access to make external network calls, using the
-# JavaScript `fetch()` API. Learn more:
-# https://shopify.dev/docs/api/checkout-ui-extensions/unstable/configuration#network-access
+# Enable network access for API calls
 network_access = true
 
+[[extensions]]
+type = "theme"
+name = "Curtain Visualizer"
+handle = "curtain-visualizer"
+
+# Define extension points
+[[extensions.targeting]]
+module = ["product"]
+target = "section"
+
+# Extension settings
+[settings]
+api_version = "2024-01"
+
+# Assets configuration
+[assets]
+main = "blocks/product-visualizer.liquid"
+
+# Include additional assets
+[[assets.custom]]
+path = "assets/visualizer.js"
+[[assets.custom]]
+path = "assets/visualizer.css"

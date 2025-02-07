@@ -1,0 +1,146 @@
+.curtain-visualizer {
+  margin: 20px 0;
+}
+
+.curtain-visualizer__button {
+  background-color: #008060;
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
+}
+
+.curtain-visualizer__button:hover {
+  background-color: #006e52;
+}
+
+.curtain-visualizer__modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.curtain-visualizer__modal-content {
+  position: relative;
+  background-color: white;
+  margin: 5% auto;
+  padding: 20px;
+  width: 90%;
+  max-width: 800px;
+  border-radius: 8px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.curtain-visualizer__close {
+  position: absolute;
+  right: 20px;
+  top: 10px;
+  font-size: 28px;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+.visualizer-step {
+  text-align: center;
+  padding: 20px;
+}
+
+.upload-area {
+  border: 2px dashed #ccc;
+  padding: 40px;
+  margin: 20px 0;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+.upload-button {
+  background-color: #008060;
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.canvas-container {
+  position: relative;
+  max-width: 100%;
+  margin: 20px auto;
+}
+
+#selectionCanvas {
+  max-width: 100%;
+  border: 1px solid #ccc;
+}
+
+.tool-controls {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.tool-controls button {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+}
+
+.tool-controls button:hover {
+  background-color: #f0f0f0;
+}
+
+.result-container {
+  max-width: 100%;
+  margin: 20px auto;
+}
+
+#resultImage {
+  max-width: 100%;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.visualizer-loading {
+  text-align: center;
+  padding: 40px;
+}
+
+.loading-spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #008060;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

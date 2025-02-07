@@ -1,0 +1,75 @@
+{% schema %}
+{
+  "name": "Curtain Visualizer",
+  "target": "section",
+  "stylesheet": "visualizer.css",
+  "javascript": "visualizer.js",
+  "settings": [
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button Text",
+      "default": "Try In Your Space"
+    }
+  ]
+}
+{% endschema %}
+
+<div class="curtain-visualizer" data-product-id="{{ product.id }}" data-variant-id="{{ product.selected_or_first_available_variant.id }}">
+  <button class="curtain-visualizer__button" id="openVisualizerBtn">
+    {{ block.settings.button_text }}
+  </button>
+
+  <div class="curtain-visualizer__modal" id="visualizerModal">
+    <div class="curtain-visualizer__modal-content">
+      <button class="curtain-visualizer__close" id="closeVisualizerBtn">&times;</button>
+      
+      <div class="curtain-visualizer__steps">
+        <!-- Step 1: Image Upload -->
+        <div class="visualizer-step" id="step1">
+          <h2>Upload Your Room Photo</h2>
+          <p>Take or upload a photo of your windows</p>
+          <div class="upload-area" id="uploadArea">
+            <input type="file" id="imageInput" accept="image/*" hidden>
+            <button class="upload-button" id="uploadButton">
+              Upload Image
+            </button>
+            <p>or drag and drop here</p>
+          </div>
+        </div>
+
+        <!-- Step 2: Area Selection -->
+        <div class="visualizer-step hidden" id="step2">
+          <h2>Mark Your Window Area</h2>
+          <p>Use the lasso tool to outline where you want the curtains</p>
+          <div class="canvas-container">
+            <canvas id="selectionCanvas"></canvas>
+          </div>
+          <div class="tool-controls">
+            <button id="undoButton">Undo</button>
+            <button id="clearButton">Clear</button>
+            <button id="confirmButton">Confirm Selection</button>
+          </div>
+        </div>
+
+        <!-- Step 3: Result -->
+        <div class="visualizer-step hidden" id="step3">
+          <h2>Your Customized View</h2>
+          <div class="result-container">
+            <img id="resultImage" alt="Generated Preview">
+          </div>
+          <div class="action-buttons">
+            <button id="tryAgainButton">Try Again</button>
+            <button id="addToCartButton">Add to Cart</button>
+          </div>
+        </div>
+
+        <!-- Loading State -->
+        <div class="visualizer-loading hidden" id="loadingState">
+          <div class="loading-spinner"></div>
+          <p>Generating your custom preview...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
