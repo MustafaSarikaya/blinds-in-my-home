@@ -34,6 +34,7 @@ export const settings: GadgetSettings = {
           "write_content",
         ],
       },
+      openai: true,
     },
   },
 };

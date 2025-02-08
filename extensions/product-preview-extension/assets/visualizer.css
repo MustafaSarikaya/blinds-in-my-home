@@ -1,6 +1,6 @@
 .curtain-visualizer {
   margin: 20px 0;
-  justify-content: center;
+  align-items: center;
 }
 
 .curtain-visualizer__button {
@@ -32,7 +32,7 @@
 .curtain-visualizer__modal-content {
   position: relative;
   background-color: white;
-  margin: 5% auto;
+ 
   padding: 20px;
   width: 90%;
   max-width: 800px;
