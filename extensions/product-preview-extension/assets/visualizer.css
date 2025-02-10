@@ -16,6 +16,8 @@
   display: block;
   width: fit-content;
   min-width: 200px;
+  margin: 0 auto !important;
+  text-align: center !important;
 }
 
 .visualizer-button:hover {
@@ -168,7 +170,11 @@
 }
 
 .curtain-visualizer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   margin: 20px 0;
+  width: 100%;
 }
 
 .curtain-visualizer__button {
@@ -304,4 +310,26 @@
   height: 40px;
   animation: spin 1s linear infinite;
   margin: 0 auto 20px;
+}
+
+/* Button container */
+.button-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 0;
+}
+
+/* Main visualizer button */
+.visualizer-button {
+  display: block;
+  width: fit-content;
+  min-width: 200px;
+  margin: 0 auto !important;
+  text-align: center !important;
+}
+
+.curtain-visualizer {
+  width: 100%;
+  margin: 20px 0;
 }
