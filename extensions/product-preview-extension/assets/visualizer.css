@@ -16,8 +16,6 @@
   display: block;
   width: fit-content;
   min-width: 200px;
-  margin: 0 auto !important;
-  text-align: center !important;
 }
 
 .visualizer-button:hover {
@@ -320,16 +318,3 @@
   padding: 10px 0;
 }
 
-/* Main visualizer button */
-.visualizer-button {
-  display: block;
-  width: fit-content;
-  min-width: 200px;
-  margin: 0 auto !important;
-  text-align: center !important;
-}
-
-.curtain-visualizer {
-  width: 100%;
-  margin: 20px 0;
-}
