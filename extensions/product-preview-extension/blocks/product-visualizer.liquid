@@ -12,23 +12,87 @@
       "default": "Try In Your Space"
     },
     {
+      "type": "color",
+      "id": "button_color",
+      "label": "Button Background Color",
+      "default": "#008060"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Button Text Color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "select",
+      "id": "button_font_family",
+      "label": "Button Font Family",
+      "options": [
+        {
+          "value": "inherit",
+          "label": "Theme Default"
+        },
+        {
+          "value": "Arial, sans-serif",
+          "label": "Arial"
+        },
+        {
+          "value": "Helvetica, Arial, sans-serif",
+          "label": "Helvetica"
+        },
+        {
+          "value": "'Times New Roman', serif",
+          "label": "Times New Roman"
+        }
+      ],
+      "default": "inherit"
+    },
+    {
+      "type": "range",
+      "id": "button_font_size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "label": "Button Font Size",
+      "default": 16
+    },
+    {
       "type": "select",
       "id": "button_alignment",
       "label": "Button Alignment",
-      "default": "center",
       "options": [
-        { "value": "center", "label": "Center" },
-        { "value": "start", "label": "Start" },
-        { "value": "end", "label": "End" }
-      ]
-      
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
     }
   ]
 }
 {% endschema %}
 
 <div class="curtain-visualizer" data-product-id="{{ product.id }}" data-variant-id="{{ product.selected_or_first_available_variant.id }}">
-  <button class="curtain-visualizer__button" id="openVisualizerBtn">
+  <button 
+    id="openVisualizerBtn" 
+    class="visualizer-button"
+    style="
+      background-color: {{ block.settings.button_color }};
+      color: {{ block.settings.button_text_color }};
+      font-family: {{ block.settings.button_font_family }};
+      font-size: {{ block.settings.button_font_size }}px;
+      text-align: {{ block.settings.button_alignment }};
+      margin: {{ block.settings.button_alignment | split: ' ' | first | prepend: '0 ' | append: ' auto 0 ' }};"
+  >
     {{ block.settings.button_text }}
   </button>
 
