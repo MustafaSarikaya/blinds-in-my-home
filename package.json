@@ -1,8 +1,8 @@
 {
   "name": "blinds-in-my-home",
   "version": "0.1.0",
-  "description": "Internal package for Gadget app blinds-in-my-home (Development environment)",
-  "license": "UNLICENSED",
+  "description": "A Shopify app for visualizing curtains and blinds in room photos",
+  "license": "CC-BY-NC-4.0",
   "private": true,
   "scripts": {
     "build": "NODE_ENV=production vite build"
