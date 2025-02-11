@@ -111,4 +111,4 @@ For issues and feature requests, please:
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the CC BY-NC License - see the LICENSE file for details.
