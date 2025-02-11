@@ -82,19 +82,19 @@
 {% endschema %}
 
 <div class="curtain-visualizer" data-product-id="{{ product.id }}" data-variant-id="{{ product.selected_or_first_available_variant.id }}">
-  <button 
-    id="openVisualizerBtn" 
-    class="visualizer-button"
-    style="
-      background-color: {{ block.settings.button_color }};
-      color: {{ block.settings.button_text_color }};
-      font-family: {{ block.settings.button_font_family }};
-      font-size: {{ block.settings.button_font_size }}px;
-      text-align: {{ block.settings.button_alignment }};
-      margin: {{ block.settings.button_alignment | split: ' ' | first | prepend: '0 ' | append: ' auto 0 ' }};"
-  >
-    {{ block.settings.button_text }}
-  </button>
+  <div class="button-container" style="justify-content: {{ block.settings.button_alignment }};">
+    <button 
+      id="openVisualizerBtn" 
+      class="visualizer-button"
+      style="
+        background-color: {{ block.settings.button_color }};
+        color: {{ block.settings.button_text_color }};
+        font-family: {{ block.settings.button_font_family }};
+        font-size: {{ block.settings.button_font_size }}px;"
+    >
+      {{ block.settings.button_text }}
+    </button>
+  </div>
 
   <div class="curtain-visualizer__modal" id="visualizerModal">
     <div class="curtain-visualizer__modal-content">
@@ -118,8 +118,10 @@
         <div class="visualizer-step hidden" id="step2">
           <h2>Mark Your Window Area</h2>
           <p>Use the lasso tool to outline where you want the curtains</p>
-          <div class="canvas-container">
-            <canvas id="selectionCanvas"></canvas>
+          <div class="canvas-container" id="canvasContainer">
+            <div class="canvas-wrapper">
+              <canvas id="selectionCanvas"></canvas>
+            </div>
           </div>
           <div class="tool-controls">
             <button id="undoButton">Undo</button>

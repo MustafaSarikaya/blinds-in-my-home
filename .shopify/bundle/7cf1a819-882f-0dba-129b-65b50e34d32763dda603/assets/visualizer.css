@@ -120,11 +120,30 @@
 }
 
 /* Canvas container */
-#selectionCanvas {
+.canvas-container {
   width: 100%;
-  max-width: 100%;
-  margin: 20px 0;
+  max-width: 1200px;
+  margin: 20px auto;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
   overflow: hidden;
+}
+
+.canvas-wrapper {
+  position: relative;
+  width: 100%;
+  height: 70vh;
+  max-height: 800px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#selectionCanvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 /* Loading state */
@@ -168,7 +187,11 @@
 }
 
 .curtain-visualizer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   margin: 20px 0;
+  width: 100%;
 }
 
 .curtain-visualizer__button {
@@ -304,4 +327,12 @@
   height: 40px;
   animation: spin 1s linear infinite;
   margin: 0 auto 20px;
+}
+
+/* Button container */
+.button-container {
+  display: flex;
+  width: 100%;
+  padding: 10px 0;
+  /* justify-content will be set inline by liquid */
 }

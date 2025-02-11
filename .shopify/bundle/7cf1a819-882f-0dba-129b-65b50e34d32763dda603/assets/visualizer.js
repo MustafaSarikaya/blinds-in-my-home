@@ -1,135 +1,305 @@
+// Helper services
+const ImageService = {
+  // Store the original image file
+  originalImage: null,
 
-// Define a class that handles all the curtain visualization functionality
-// A class is like a blueprint for creating objects with related properties and functions
-class CurtainVisualizer {
-  // The constructor is called when we create a new instance of this class
-  // It sets up all the initial properties and calls necessary setup functions
-  constructor() {
-    // Call helper functions to set up the visualizer
-    this.initializeElements();    // Find and store references to HTML elements
-    this.setupEventListeners();   // Set up all the button clicks and user interactions
+  fileToDataUrl(file) {
+    console.log('Converting file to Data URL:', { fileName: file.name, fileSize: file.size });
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        console.log('File successfully converted to Data URL');
+        resolve(e.target.result);
+      };
+      reader.onerror = (e) => {
+        console.error('Error converting file to Data URL:', e);
+        reject(e);
+      };
+      reader.readAsDataURL(file);
+    });
+  },
+
+  async loadImageFromFile(file) {
+    console.log('Loading image from file:', { fileName: file.name, fileSize: file.size });
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        console.log('Image loaded with dimensions:', {
+          width: img.width,
+          height: img.height
+        });
+        resolve(img);
+      };
+      img.onerror = (error) => {
+        console.error('Error loading image:', error);
+        reject(error);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+  },
+
+  calculateCanvasDimensions(imageWidth, imageHeight, containerWidth, containerHeight) {
+    console.log('Calculating canvas dimensions:', {
+      imageWidth,
+      imageHeight,
+      containerWidth,
+      containerHeight
+    });
+
+    const containerRatio = containerWidth / containerHeight;
+    const imageRatio = imageWidth / imageHeight;
     
-    // Initialize canvas-related properties as null (empty)
-    this.canvas = null;           // Will store the HTML canvas element
-    this.fabricCanvas = null;     // Will store the Fabric.js canvas object
+    let width, height, scale;
+    
+    if (imageRatio > containerRatio) {
+      width = containerWidth;
+      height = containerWidth / imageRatio;
+      scale = containerWidth / imageWidth;
+    } else {
+      height = containerHeight;
+      width = containerHeight * imageRatio;
+      scale = containerHeight / imageHeight;
+    }
+    
+    console.log('Calculated dimensions:', { width, height, scale });
+    return { width, height, scale };
+  },
+
+  async generateMask(fabricCanvas) {
+    console.log('Generating mask from canvas:', {
+      canvasWidth: fabricCanvas.width,
+      canvasHeight: fabricCanvas.height
+    });
+
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = fabricCanvas.width;
+    maskCanvas.height = fabricCanvas.height;
+    const maskCtx = maskCanvas.getContext('2d');
+
+    maskCtx.fillStyle = 'black';
+    maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+    const selections = fabricCanvas.getObjects().filter(obj => obj instanceof fabric.Rect);
+    console.log('Found selections:', selections.length);
+
+    maskCtx.fillStyle = 'white';
+    selections.forEach((obj, index) => {
+      console.log(`Drawing selection ${index + 1}:`, {
+        left: obj.left,
+        top: obj.top,
+        width: obj.width * obj.scaleX,
+        height: obj.height * obj.scaleY
+      });
+      maskCtx.fillRect(
+        obj.left,
+        obj.top,
+        obj.width * obj.scaleX,
+        obj.height * obj.scaleY
+      );
+    });
+
+    return new Promise((resolve) => {
+      maskCanvas.toBlob((blob) => {
+        console.log('Mask generated successfully:', { blobSize: blob.size });
+        resolve(blob);
+      }, 'image/png');
+    });
+  }
+};
+
+const ApiService = {
+  async generatePreview(imageBlob, maskBlob, productId, variantId) {
+    console.log('Starting preview generation:', {
+      imageBlobSize: imageBlob.size,
+      maskBlobSize: maskBlob.size,
+      productId,
+      variantId
+    });
+
+    const formData = new FormData();
+    formData.append('image', imageBlob);
+    formData.append('mask', maskBlob);
+    formData.append('productId', productId);
+    formData.append('variantId', variantId);
+
+    console.log('Sending preview generation request to API');
+    const response = await fetch('/api/generateProductPreview', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Preview generation failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      throw new Error('Failed to generate preview');
+    }
+
+    const result = await response.json();
+    console.log('Preview generated successfully:', result);
+    return result;
+  },
+
+  async addToCart(variantId, quantity = 1) {
+    console.log('Starting add to cart:', {
+      variantId,
+      quantity
+    });
+
+    const formData = {
+      items: [{ id: variantId, quantity }]
+    };
+
+    console.log('Sending add to cart request:', formData);
+    const response = await fetch('/cart/add.js', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(formData)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Add to cart failed:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText
+      });
+      throw new Error('Failed to add item to cart');
+    }
+
+    const result = await response.json();
+    console.log('Item added to cart successfully:', result);
+    return result;
+  }
+};
+
+class CurtainVisualizer {
+  constructor() {
+    console.log('Initializing CurtainVisualizer');
+    this.initializeElements();
+    this.setupEventListeners();
+    this.canvas = null;
+    this.fabricCanvas = null;
   }
 
-  // Find all the HTML elements we need and store them for later use
-  // This makes it easier to reference these elements throughout our code
   initializeElements() {
-    // Find and store all button elements
-    this.openButton = document.getElementById('openVisualizerBtn');      // Button to open the modal
-    this.closeButton = document.getElementById('closeVisualizerBtn');    // Button to close the modal
-    this.uploadButton = document.getElementById('uploadButton');         // Button to trigger file upload
-    this.imageInput = document.getElementById('imageInput');            // Hidden file input element
-    this.undoButton = document.getElementById('undoButton');            // Button to undo last selection
-    this.clearButton = document.getElementById('clearButton');          // Button to clear all selections
-    this.confirmButton = document.getElementById('confirmButton');      // Button to confirm and generate preview
-    this.tryAgainButton = document.getElementById('tryAgainButton');    // Button to restart the process
-    this.addToCartButton = document.getElementById('addToCartButton');  // Button to add product to cart
+    console.log('Finding and initializing DOM elements');
+    // Buttons
+    this.openButton = document.getElementById('openVisualizerBtn');
+    this.closeButton = document.getElementById('closeVisualizerBtn');
+    this.uploadButton = document.getElementById('uploadButton');
+    this.imageInput = document.getElementById('imageInput');
+    this.undoButton = document.getElementById('undoButton');
+    this.clearButton = document.getElementById('clearButton');
+    this.confirmButton = document.getElementById('confirmButton');
+    this.tryAgainButton = document.getElementById('tryAgainButton');
+    this.addToCartButton = document.getElementById('addToCartButton');
 
-    // Find and store all container and display elements
-    this.modal = document.getElementById('visualizerModal');            // The main modal window
-    this.step1 = document.getElementById('step1');                      // Upload step container
-    this.step2 = document.getElementById('step2');                      // Selection step container
-    this.step3 = document.getElementById('step3');                      // Result step container
-    this.loadingState = document.getElementById('loadingState');        // Loading spinner container
-    this.canvasContainer = document.getElementById('selectionCanvas').parentElement;  // Container for the canvas
-    this.resultImage = document.getElementById('resultImage');          // Image element for showing the result
-    this.uploadArea = document.getElementById('uploadArea');            // Drop zone for file uploads
+    // Containers
+    this.modal = document.getElementById('visualizerModal');
+    this.step1 = document.getElementById('step1');
+    this.step2 = document.getElementById('step2');
+    this.step3 = document.getElementById('step3');
+    this.loadingState = document.getElementById('loadingState');
+    this.canvasContainer = document.getElementById('selectionCanvas').parentElement;
+    this.resultImage = document.getElementById('resultImage');
+    this.uploadArea = document.getElementById('uploadArea');
 
-    // Get product information from data attributes in the HTML
-    // These are set by Shopify and we need them to identify which product we're working with
-    this.productId = document.querySelector('.curtain-visualizer').dataset.productId;
-    this.variantId = document.querySelector('.curtain-visualizer').dataset.variantId;
+    const visualizer = document.querySelector('.curtain-visualizer');
+    this.productId = visualizer.dataset.productId;
+    this.variantId = visualizer.dataset.variantId;
+    
+    console.log('Elements initialized:', {
+      productId: this.productId,
+      variantId: this.variantId
+    });
   }
 
-  // Set up all the event listeners (what happens when users click buttons or interact with elements)
   setupEventListeners() {
-    // Modal control events
-    // When user clicks the open button, show the modal
+    console.log('Setting up event listeners');
+    // Modal controls
     this.openButton.addEventListener('click', () => this.openModal());
-    // When user clicks the close button, hide the modal
     this.closeButton.addEventListener('click', () => this.closeModal());
 
-    // File upload related events
-    // When upload button is clicked, trigger the hidden file input
+    // Upload handlers
     this.uploadButton.addEventListener('click', () => this.imageInput.click());
-    // When a file is selected through the file input, handle the upload
     this.imageInput.addEventListener('change', (e) => this.handleImageUpload(e));
-    // Handle drag and drop events for file upload
     this.uploadArea.addEventListener('dragover', (e) => this.handleDragOver(e));
     this.uploadArea.addEventListener('drop', (e) => this.handleDrop(e));
 
-    // Selection control events
-    // Set up buttons for managing the window area selections
+    // Selection controls
     this.undoButton.addEventListener('click', () => this.undoLastSelection());
     this.clearButton.addEventListener('click', () => this.clearSelection());
     this.confirmButton.addEventListener('click', () => this.generatePreview());
-    
-    // Result control events
-    // Buttons for handling the final step after preview is generated
+
+    // Result controls
     this.tryAgainButton.addEventListener('click', () => this.resetToStep1());
     this.addToCartButton.addEventListener('click', () => this.addToCart());
   }
 
-  // Initialize the Fabric.js canvas for drawing window selections
-  // Fabric.js is a powerful library that makes it easier to work with HTML canvas
-  initializeFabricCanvas(width, height) {
-    // Remove any existing canvas if there is one
-    if (this.canvas) {
-      this.canvas.remove();
+  initializeCanvas(width, height) {
+    console.log('Initializing canvas with dimensions:', { width, height });
+
+    if (this.fabricCanvas) {
+      console.log('Disposing existing canvas');
+      this.fabricCanvas.dispose();
     }
 
-    // Create a new canvas element and add it to our container
-    this.canvas = document.createElement('canvas');
-    this.canvasContainer.appendChild(this.canvas);
+    const canvas = document.getElementById('selectionCanvas');
+    canvas.width = width;
+    canvas.height = height;
 
-    // Create a new Fabric.js canvas wrapper around our HTML canvas
-    // This gives us access to all the powerful Fabric.js features
-    this.fabricCanvas = new fabric.Canvas(this.canvas, {
+    console.log('Creating new Fabric.js canvas');
+    this.fabricCanvas = new fabric.Canvas('selectionCanvas', {
       width: width,
       height: height,
-      selection: false  // Disable group selection - we only want to select one rectangle at a time
+      selection: false,
+      preserveObjectStacking: true
     });
 
-    // Set up variables for drawing rectangles
-    let isDrawing = false;    // Tracks if we're currently drawing
-    let rect;                 // Stores the current rectangle being drawn
-    let startX, startY;       // Store the starting coordinates when drawing
+    this._setupDrawingMode();
+    console.log('Canvas initialization complete');
+  }
 
-    // When the user clicks down on the canvas
+  _setupDrawingMode() {
+    console.log('Setting up drawing mode');
+    let isDrawing = false;
+    let rect;
+    let startX, startY;
+
     this.fabricCanvas.on('mouse:down', (o) => {
+      console.log('Mouse down event:', o.pointer);
       isDrawing = true;
-      // Get the mouse position relative to the canvas
       const pointer = this.fabricCanvas.getPointer(o.e);
       startX = pointer.x;
       startY = pointer.y;
 
-      // Create a new rectangle at the click position
       rect = new fabric.Rect({
         left: startX,
         top: startY,
         width: 0,
         height: 0,
-        stroke: '#008060',        // Green border color
-        strokeWidth: 2,           // Border thickness
-        fill: 'rgba(0, 128, 96, 0.2)',  // Semi-transparent green fill
-        selectable: true          // Allow the rectangle to be moved/resized
+        stroke: '#008060',
+        strokeWidth: 2,
+        fill: 'rgba(0, 128, 96, 0.2)',
+        selectable: true
       });
 
-      // Add the rectangle to the canvas
       this.fabricCanvas.add(rect);
+      console.log('Started drawing rectangle at:', { x: startX, y: startY });
     });
 
-    // When the user moves the mouse while drawing
     this.fabricCanvas.on('mouse:move', (o) => {
-      if (!isDrawing) return;  // Only do something if we're drawing
+      if (!isDrawing) return;
 
-      // Get current mouse position
       const pointer = this.fabricCanvas.getPointer(o.e);
+      console.log('Mouse move while drawing:', pointer);
       
-      // Update rectangle position if drawing backwards/upwards
       if (startX > pointer.x) {
         rect.set({ left: pointer.x });
       }
@@ -137,200 +307,206 @@ class CurtainVisualizer {
         rect.set({ top: pointer.y });
       }
 
-      // Update rectangle size based on mouse movement
       rect.set({
         width: Math.abs(startX - pointer.x),
         height: Math.abs(startY - pointer.y)
       });
 
-      // Redraw the canvas with the updated rectangle
       this.fabricCanvas.renderAll();
     });
 
-    // When the user releases the mouse button
     this.fabricCanvas.on('mouse:up', () => {
       isDrawing = false;
-      // Remove the rectangle if it has no size (just a click, not a drag)
       if (rect.width === 0 || rect.height === 0) {
+        console.log('Removing zero-size rectangle');
         this.fabricCanvas.remove(rect);
+      } else {
+        console.log('Finished drawing rectangle:', {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height
+        });
       }
-      // Make this rectangle the active (selected) object
       this.fabricCanvas.setActiveObject(rect);
-      // Update the canvas display
       this.fabricCanvas.renderAll();
     });
   }
 
-  // Show the modal window
   openModal() {
+    console.log('Opening modal');
     this.modal.style.display = 'block';
   }
 
-  // Hide the modal window and reset everything
   closeModal() {
+    console.log('Closing modal');
     this.modal.style.display = 'none';
     this.resetToStep1();
   }
 
-  // Handle when a file is selected through the file input
-  handleImageUpload(event) {
-    const file = event.target.files[0];  // Get the selected file
+  async handleImageUpload(event) {
+    console.log('Handling image upload:', event);
+    const file = event.target.files[0];
     if (file) {
-      this.loadImage(file);  // Process the file
+      await this.loadImage(file);
     }
   }
 
-  // Handle when a file is being dragged over the drop zone
   handleDragOver(event) {
-    event.preventDefault();  // Prevent default browser handling
-    event.stopPropagation();  // Stop the event from bubbling up
-    this.uploadArea.style.borderColor = '#008060';  // Change border color to show drop zone is active
-  }
-
-  // Handle when a file is dropped onto the drop zone
-  handleDrop(event) {
+    console.log('Handling drag over:', event);
     event.preventDefault();
     event.stopPropagation();
-    this.uploadArea.style.borderColor = '#ccc';  // Reset border color
+    this.uploadArea.style.borderColor = '#008060';
+  }
+
+  handleDrop(event) {
+    console.log('Handling drop:', event);
+    event.preventDefault();
+    event.stopPropagation();
+    this.uploadArea.style.borderColor = '#ccc';
     
-    // Get the dropped file and process it if it's an image
     const file = event.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
       this.loadImage(file);
     }
   }
 
-  // Load and display an image file on the canvas
-  loadImage(file) {
-    // Create a FileReader to read the image file
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      // Use Fabric.js to load the image
-      fabric.Image.fromURL(e.target.result, (img) => {
-        // Calculate scaling to fit the image in our container
-        const containerWidth = this.canvasContainer.clientWidth;
-        const scale = containerWidth / img.width;
-        
-        const scaledWidth = img.width * scale;
-        const scaledHeight = img.height * scale;
+  async loadImage(file) {
+    console.log('Starting image load process:', { 
+      fileName: file.name, 
+      fileType: file.type, 
+      fileSize: file.size 
+    });
 
-        // Create a new canvas with the correct size
-        this.initializeFabricCanvas(scaledWidth, scaledHeight);
+    try {
+      ImageService.originalImage = file;
+      const imageUrl = URL.createObjectURL(file);
+      console.log('Created object URL for image:', imageUrl);
 
-        // Scale the image and set it as the canvas background
-        img.scale(scale);
-        this.fabricCanvas.setBackgroundImage(img, this.fabricCanvas.renderAll.bind(this.fabricCanvas));
-
-        // Move to the selection step
-        this.step1.classList.add('hidden');
-        this.step2.classList.remove('hidden');
+      const img = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          console.log('Image loaded with dimensions:', {
+            width: img.width,
+            height: img.height
+          });
+          resolve(img);
+        };
+        img.onerror = (error) => {
+          console.error('Error loading image:', error);
+          reject(error);
+        };
+        img.src = imageUrl;
       });
-    };
-    // Start reading the file
-    reader.readAsDataURL(file);
-  }
 
-  // Remove the last selected area
-  undoLastSelection() {
-    const activeObject = this.fabricCanvas.getActiveObject();
-    if (activeObject) {
-      this.fabricCanvas.remove(activeObject);
+      const container = document.querySelector('.canvas-wrapper');
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      console.log('Container dimensions:', { containerWidth, containerHeight });
+
+      const { width, height, scale } = ImageService.calculateCanvasDimensions(
+        img.width,
+        img.height,
+        containerWidth,
+        containerHeight
+      );
+
+      this.initializeCanvas(width, height);
+
+      console.log('Loading image into Fabric.js canvas');
+      fabric.Image.fromURL(imageUrl, (fabricImg) => {
+        console.log('Image loaded into Fabric.js');
+        fabricImg.scaleToWidth(width);
+        fabricImg.scaleToHeight(height);
+        
+        this.fabricCanvas.setBackgroundImage(fabricImg, () => {
+          console.log('Background image set and rendered');
+          this.fabricCanvas.renderAll();
+          
+          this.step1.classList.add('hidden');
+          this.step2.classList.remove('hidden');
+        }, {
+          originX: 'center',
+          originY: 'center',
+          left: width / 2,
+          top: height / 2,
+          crossOrigin: 'anonymous'
+        });
+      }, { crossOrigin: 'anonymous' });
+
+    } catch (error) {
+      console.error('Error in loadImage:', error);
+      alert('Failed to load image. Please try again.');
+    } finally {
+      if (imageUrl) {
+        console.log('Cleaning up object URL');
+        URL.revokeObjectURL(imageUrl);
+      }
     }
   }
 
-  // Clear all selected areas
+  undoLastSelection() {
+    console.log('Undoing last selection');
+    const activeObject = this.fabricCanvas.getActiveObject();
+    if (activeObject) {
+      this.fabricCanvas.remove(activeObject);
+      this.fabricCanvas.renderAll();
+    }
+  }
+
   clearSelection() {
-    // Remove all objects except the background image
+    console.log('Clearing selection');
     this.fabricCanvas.getObjects().slice().forEach(obj => {
       if (obj !== this.fabricCanvas.backgroundImage) {
         this.fabricCanvas.remove(obj);
       }
     });
+    this.fabricCanvas.renderAll();
   }
 
-  // Generate a mask image from the selected areas
-  // A mask is a black and white image where white areas show where the curtains should go
-  async generateMaskFromSelection() {
-    // Create a new canvas for the mask
-    const maskCanvas = document.createElement('canvas');
-    maskCanvas.width = this.fabricCanvas.width;
-    maskCanvas.height = this.fabricCanvas.height;
-    const maskCtx = maskCanvas.getContext('2d');
-
-    // Fill the entire mask with black
-    maskCtx.fillStyle = 'black';
-    maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-
-    // Draw white rectangles for all selected areas
-    maskCtx.fillStyle = 'white';
-    this.fabricCanvas.getObjects().forEach(obj => {
-      if (obj instanceof fabric.Rect) {
-        maskCtx.fillRect(obj.left, obj.top, obj.width * obj.scaleX, obj.height * obj.scaleY);
-      }
-    });
-
-    // Convert the mask canvas to a PNG blob
-    return new Promise((resolve) => {
-      maskCanvas.toBlob((blob) => {
-        resolve(blob);
-      }, 'image/png');
-    });
-  }
-
-  // Generate the curtain preview using the selected areas
   async generatePreview() {
-    // Check if there are any selections
+    console.log('Generating preview');
     const selections = this.fabricCanvas.getObjects().filter(obj => obj instanceof fabric.Rect);
     if (selections.length === 0) {
+      console.log('No selections found');
       alert('Please select at least one window area');
       return;
     }
 
-    // Show loading state
     this.step2.classList.add('hidden');
     this.loadingState.classList.remove('hidden');
 
     try {
-      // Generate the mask image from our selections
-      const maskBlob = await this.generateMaskFromSelection();
+      const maskBlob = await ImageService.generateMask(this.fabricCanvas);
       
-      // Create form data to send to the server
       const formData = new FormData();
-      this.fabricCanvas.toBlob(async (imageBlob) => {
-        // Add all necessary data to the form
-        formData.append('image', imageBlob);
-        formData.append('mask', maskBlob);
-        formData.append('productId', this.productId);
-        formData.append('variantId', this.variantId);
+      formData.append('image', ImageService.originalImage);
+      formData.append('mask', maskBlob);
+      formData.append('productId', this.productId);
+      formData.append('variantId', this.variantId);
 
-        try {
-          // Send the data to our server API
-          const response = await fetch('/api/generateProductPreview', {
-            method: 'POST',
-            body: formData
-          });
+      try {
+        const response = await fetch('/api/generateProductPreview', {
+          method: 'POST',
+          body: formData
+        });
 
-          if (!response.ok) {
-            throw new Error('Failed to generate preview');
-          }
-
-          // Get the result and display it
-          const result = await response.json();
-          this.resultImage.src = result.generatedImageUrl;
-          
-          // Show the result
-          this.loadingState.classList.add('hidden');
-          this.step3.classList.remove('hidden');
-        } catch (error) {
-          // Handle any errors that occur during the API call
-          console.error('Error generating preview:', error);
-          alert('Failed to generate preview. Please try again.');
-          this.loadingState.classList.add('hidden');
-          this.step2.classList.remove('hidden');
+        if (!response.ok) {
+          console.error('Failed to generate preview:', response.status);
+          throw new Error('Failed to generate preview');
         }
-      }, 'image/png');
+
+        const result = await response.json();
+        this.resultImage.src = result.generatedImageUrl;
+        this.loadingState.classList.add('hidden');
+        this.step3.classList.remove('hidden');
+      } catch (error) {
+        console.error('Error generating preview:', error);
+        alert('Failed to generate preview. Please try again.');
+        this.loadingState.classList.add('hidden');
+        this.step2.classList.remove('hidden');
+      }
     } catch (error) {
-      // Handle any errors that occur during mask generation
       console.error('Error preparing images:', error);
       alert('Failed to prepare images. Please try again.');
       this.loadingState.classList.add('hidden');
@@ -338,69 +514,56 @@ class CurtainVisualizer {
     }
   }
 
-  // Reset everything back to the first step
   resetToStep1() {
-    // Hide all steps except step 1
+    console.log('Resetting to step 1');
     this.step3.classList.add('hidden');
     this.step2.classList.add('hidden');
     this.loadingState.classList.add('hidden');
     this.step1.classList.remove('hidden');
     
-    // Clean up the canvas
     if (this.fabricCanvas) {
+      console.log('Disposing canvas');
       this.fabricCanvas.dispose();
       this.fabricCanvas = null;
     }
     
-    // Clear the file input
     this.imageInput.value = '';
   }
 
-  // Add the current product to the cart
   async addToCart() {
+    console.log('Adding to cart');
     try {
-      // Create the cart data
-      const formData = {
-        items: [{
-          id: this.variantId,
-          quantity: 1
-        }]
-      };
-
-      // Send request to Shopify's cart API
-      const response = await fetch('/cart/add.js', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to add to cart');
-      }
-
-      // Close the modal after successful add to cart
+      await ApiService.addToCart(this.variantId);
       this.closeModal();
     } catch (error) {
-      // Handle any errors during add to cart
       console.error('Error adding to cart:', error);
       alert('Failed to add item to cart. Please try again.');
     }
   }
 }
 
-// When the webpage is fully loaded, set up the visualizer
+// Initialize when Fabric.js is loaded
 document.addEventListener('DOMContentLoaded', () => {
-  // First load the Fabric.js library from a CDN (Content Delivery Network)
+  console.log('Document loaded, initializing Fabric.js');
+  
   const script = document.createElement('script');
   script.src = 'https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js';
   
-  // Once Fabric.js is loaded, create our visualizer
   script.onload = () => {
-    new CurtainVisualizer();
+    console.log('Fabric.js loaded successfully');
+    try {
+      console.log('Creating CurtainVisualizer instance');
+      new CurtainVisualizer();
+      console.log('CurtainVisualizer initialized successfully');
+    } catch (error) {
+      console.error('Error initializing CurtainVisualizer:', error);
+    }
   };
   
-  // Add the script to the webpage
+  script.onerror = (error) => {
+    console.error('Failed to load Fabric.js:', error);
+  };
+  
+  console.log('Adding Fabric.js script to document');
   document.head.appendChild(script);
 });
