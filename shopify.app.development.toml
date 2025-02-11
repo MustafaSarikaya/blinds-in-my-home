@@ -7,7 +7,7 @@ name = "blinds-in-my-home"
 handle = "blinds-in-my-home"
 
 [webhooks]
-api_version = "2025-01"
+api_version = "2024-10"
 
   [[webhooks.subscriptions]]
   uri = "https://blinds-in-my-home--development.gadget.app/api/webhooks/shopify"

@@ -1,3 +1,18 @@
-# This toml file is used for production. Only edit this file if you have a need for it
-# When you add a production config, values will be auto-populated here
-# Read more at https://docs.gadget.dev/guides/plugins/shopify/shopify-app-toml
+# Learn more about working with Shopify TOML files with Gadget at https://docs.gadget.dev/guides/plugins/shopify/shopify-app-toml
+
+client_id = "6198420f61284be262e68455fd5edcff"
+name = "blinds-in-my-home"
+application_url = "https://blinds-in-my-home.gadget.app/api/shopify/install-or-render"
+embedded = true
+
+[build]
+# Gadget manages all your scopes, webhooks and api versioning for your app
+# As such, this line should not be changed unless you are working with
+# Shopify managed installations. Read more at https://docs.gadget.dev/guides/plugins/shopify/shopify-app-toml
+include_config_on_deploy = false
+
+[auth]
+redirect_urls = ["https://blinds-in-my-home.gadget.app/api/connections/auth/shopify/callback"]
+
+[webhooks]
+api_version = "2024-10"

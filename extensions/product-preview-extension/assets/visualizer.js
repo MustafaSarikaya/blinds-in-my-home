@@ -46,20 +46,33 @@ const ImageService = {
       containerHeight
     });
 
+    // If container dimensions are 0, use default values based on typical screen sizes
+    if (containerWidth === 0 || containerHeight === 0) {
+      containerWidth = Math.min(window.innerWidth * 0.25, 900); // 25% of window width, max 1200px
+      containerHeight = Math.min(window.innerHeight * 0.1, 300); // 70% of window height, max 800px
+      console.log('Using default container dimensions:', { containerWidth, containerHeight });
+    }
+
     const containerRatio = containerWidth / containerHeight;
     const imageRatio = imageWidth / imageHeight;
     
     let width, height, scale;
     
     if (imageRatio > containerRatio) {
+      // Image is wider than container ratio
       width = containerWidth;
       height = containerWidth / imageRatio;
       scale = containerWidth / imageWidth;
     } else {
+      // Image is taller than container ratio
       height = containerHeight;
       width = containerHeight * imageRatio;
       scale = containerHeight / imageHeight;
     }
+    
+    // Ensure minimum dimensions
+    width = Math.max(width, 300);
+    height = Math.max(height, 200);
     
     console.log('Calculated dimensions:', { width, height, scale });
     return { width, height, scale };
@@ -108,6 +121,9 @@ const ImageService = {
 };
 
 const ApiService = {
+  // Base URL for the Gadget API
+  baseUrl: 'https://blinds-in-my-home.gadget.app/api',
+
   async generatePreview(imageBlob, maskBlob, productId, variantId) {
     console.log('Starting preview generation:', {
       imageBlobSize: imageBlob.size,
@@ -122,25 +138,34 @@ const ApiService = {
     formData.append('productId', productId);
     formData.append('variantId', variantId);
 
-    console.log('Sending preview generation request to API');
-    const response = await fetch('/api/generateProductPreview', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Preview generation failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
+    console.log('Sending preview generation request to Gadget API');
+    try {
+      const response = await fetch(`${this.baseUrl}/generateProductPreview`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Accept': 'application/json',
+        },
+        credentials: 'include'
       });
-      throw new Error('Failed to generate preview');
-    }
 
-    const result = await response.json();
-    console.log('Preview generated successfully:', result);
-    return result;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Preview generation failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Failed to generate preview: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('Preview generated successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw new Error('Failed to generate preview: ' + (error.message || 'Network error'));
+    }
   },
 
   async addToCart(variantId, quantity = 1) {
@@ -153,6 +178,7 @@ const ApiService = {
       items: [{ id: variantId, quantity }]
     };
 
+    // Note: Keep the cart endpoint as is since it's a Shopify endpoint
     console.log('Sending add to cart request:', formData);
     const response = await fetch('/cart/add.js', {
       method: 'POST',
@@ -378,10 +404,11 @@ class CurtainVisualizer {
       fileSize: file.size 
     });
 
+    let objectUrl = null;
     try {
       ImageService.originalImage = file;
-      const imageUrl = URL.createObjectURL(file);
-      console.log('Created object URL for image:', imageUrl);
+      objectUrl = URL.createObjectURL(file);
+      console.log('Created object URL for image:', objectUrl);
 
       const img = await new Promise((resolve, reject) => {
         const img = new Image();
@@ -396,12 +423,25 @@ class CurtainVisualizer {
           console.error('Error loading image:', error);
           reject(error);
         };
-        img.src = imageUrl;
+        img.src = objectUrl;
       });
 
-      const container = document.querySelector('.canvas-wrapper');
-      const containerWidth = container.clientWidth;
-      const containerHeight = container.clientHeight;
+      // Get container and ensure it's rendered
+      const container = document.querySelector('.canvas-container');
+      
+      // Force a reflow to ensure dimensions are calculated
+      container.offsetHeight;
+      
+      let containerWidth = container.clientWidth;
+      let containerHeight = container.clientHeight;
+      
+      // If dimensions are still 0, get them from the computed style
+      if (containerWidth === 0 || containerHeight === 0) {
+        const style = window.getComputedStyle(container);
+        containerWidth = parseInt(style.width) || containerWidth;
+        containerHeight = parseInt(style.height) || containerHeight;
+      }
+      
       console.log('Container dimensions:', { containerWidth, containerHeight });
 
       const { width, height, scale } = ImageService.calculateCanvasDimensions(
@@ -414,34 +454,46 @@ class CurtainVisualizer {
       this.initializeCanvas(width, height);
 
       console.log('Loading image into Fabric.js canvas');
-      fabric.Image.fromURL(imageUrl, (fabricImg) => {
-        console.log('Image loaded into Fabric.js');
-        fabricImg.scaleToWidth(width);
-        fabricImg.scaleToHeight(height);
-        
-        this.fabricCanvas.setBackgroundImage(fabricImg, () => {
-          console.log('Background image set and rendered');
-          this.fabricCanvas.renderAll();
+      return new Promise((resolve, reject) => {
+        fabric.Image.fromURL(objectUrl, (fabricImg) => {
+          console.log('Image loaded into Fabric.js');
+          fabricImg.scaleToWidth(width);
+          fabricImg.scaleToHeight(height);
           
-          this.step1.classList.add('hidden');
-          this.step2.classList.remove('hidden');
-        }, {
-          originX: 'center',
-          originY: 'center',
-          left: width / 2,
-          top: height / 2,
+          this.fabricCanvas.setBackgroundImage(fabricImg, () => {
+            console.log('Background image set and rendered');
+            this.fabricCanvas.renderAll();
+            
+            this.step1.classList.add('hidden');
+            this.step2.classList.remove('hidden');
+            
+            // Now that we're done with the image URL, we can revoke it
+            if (objectUrl) {
+              console.log('Cleaning up object URL');
+              URL.revokeObjectURL(objectUrl);
+              objectUrl = null;
+            }
+            resolve();
+          }, {
+            originX: 'center',
+            originY: 'center',
+            left: width / 2,
+            top: height / 2,
+            crossOrigin: 'anonymous'
+          });
+        }, { 
           crossOrigin: 'anonymous'
         });
-      }, { crossOrigin: 'anonymous' });
+      });
 
     } catch (error) {
       console.error('Error in loadImage:', error);
       alert('Failed to load image. Please try again.');
-    } finally {
-      if (imageUrl) {
-        console.log('Cleaning up object URL');
-        URL.revokeObjectURL(imageUrl);
+      if (objectUrl) {
+        console.log('Cleaning up object URL due to error');
+        URL.revokeObjectURL(objectUrl);
       }
+      throw error;
     }
   }
 
@@ -488,7 +540,7 @@ class CurtainVisualizer {
       try {
         const response = await fetch('/api/generateProductPreview', {
           method: 'POST',
-          body: formData
+          body: formData,
         });
 
         if (!response.ok) {

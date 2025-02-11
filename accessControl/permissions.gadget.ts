@@ -161,6 +161,7 @@ export const permissions: GadgetPermissions = {
         },
       },
       actions: {
+        generateProductPreview: true,
         scheduledShopifySync: true,
       },
     },

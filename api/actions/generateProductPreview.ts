@@ -1,5 +1,4 @@
-import sharp from 'sharp';
-import { ActionRun } from '@shopify/shopify-app-remix';
+import { createCanvas, loadImage } from 'canvas';
 
 // Define input parameter types
 interface GenerateProductPreviewParams {
@@ -11,6 +10,7 @@ interface GenerateProductPreviewParams {
     buffer: Buffer;
     mimetype: string;
   };
+  productId: string;
   productTitle: string;
   productDescription: string;
 }
@@ -19,10 +19,10 @@ interface GenerateProductPreviewParams {
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const TARGET_WIDTH = 1080;
 const TIMEOUT = 30000; // 30 seconds
-const SUPPORTED_FORMATS = ['image/jpeg', 'image/png'];
+const SUPPORTED_FORMATS = ['image/jpeg', 'image/png'];f
 
 export const run: ActionRun = async ({ params, connections }) => {
-  const { customerImage, maskImage, productTitle, productDescription } = params as GenerateProductPreviewParams;
+  const { customerImage, maskImage, productId, productTitle, productDescription } = params as GenerateProductPreviewParams;
 
   try {
     // Validate input files
@@ -37,9 +37,6 @@ export const run: ActionRun = async ({ params, connections }) => {
     const processedCustomerImage = await processImage(customerImage.buffer);
     const processedMaskImage = await processImage(maskImage.buffer);
 
-    // Create OpenAI client
-    const openai = new OpenAI();
-
     // Prepare prompt for realistic integration
     const prompt = generatePrompt(productTitle, productDescription);
 
@@ -50,7 +47,7 @@ export const run: ActionRun = async ({ params, connections }) => {
 
     // Make API call to DALL-E 2
     const imageResponse = await Promise.race([
-      openai.images.edit({
+      connections.openai.images.edit({
         image: processedCustomerImage,
         mask: processedMaskImage,
         prompt: prompt,
@@ -92,30 +89,41 @@ function validateImage(image: { buffer: Buffer; mimetype: string }) {
   }
 }
 
-async function processImage(buffer: Buffer): Promise<Buffer> {
-  const image = sharp(buffer);
-  const metadata = await image.metadata();
+async function processImage(imageBuffer: Buffer): Promise<Buffer> {
+  try {
+    // Create a data URL from the buffer
+    const dataUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+    
+    // Load the image
+    const image = await loadImage(dataUrl);
+    
+    // Create a canvas with the image dimensions
+    const canvas = createCanvas(image.width, image.height);
+    const ctx = canvas.getContext('2d');
+    
+    // Draw the image onto the canvas
+    ctx.drawImage(image, 0, 0);
+    
+    // Resize if width is larger than target width while maintaining aspect ratio
+    if (image.width > TARGET_WIDTH) {
+      const newWidth = TARGET_WIDTH;
+      const newHeight = Math.floor(image.height * (newWidth / image.width));
+      const newCanvas = createCanvas(newWidth, newHeight);
+      const newCtx = newCanvas.getContext('2d');
+      newCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
+      return newCanvas.toBuffer('image/png');
+    }
 
-  if (!metadata.width) {
-    throw new Error('Invalid image');
+    return canvas.toBuffer('image/png');
+  } catch (error) {
+    console.error('Error processing image:', error);
+    throw error;
   }
-
-  // Resize if width is larger than target width while maintaining aspect ratio
-  if (metadata.width > TARGET_WIDTH) {
-    return image
-      .resize(TARGET_WIDTH, undefined, {
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .toBuffer();
-  }
-
-  return buffer;
 }
 
-function generatePrompt(title: string, description: string): string {
-  return `Create a highly realistic visualization of ${title} in this space. 
-    The product should seamlessly blend with the existing environment while maintaining these specifications: ${description}. 
+function generatePrompt(productTitle: string, productDescription: string): string {
+  return `Create a highly realistic visualization of ${productTitle} in this space. 
+    The product should seamlessly blend with the existing environment while maintaining these specifications: ${productDescription}. 
     Ensure natural lighting, proper perspective, and realistic shadows to match the original image's style.`;
 }
 
@@ -137,6 +145,7 @@ export const params = {
       mimetype: { type: 'string' },
     },
   },
+  productId: { type: 'string' },
   productTitle: { type: 'string' },
   productDescription: { type: 'string' },
 };
