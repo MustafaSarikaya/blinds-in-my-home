@@ -3,41 +3,6 @@ const ImageService = {
   // Store the original image file
   originalImage: null,
 
-  fileToDataUrl(file) {
-    console.log('Converting file to Data URL:', { fileName: file.name, fileSize: file.size });
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        console.log('File successfully converted to Data URL');
-        resolve(e.target.result);
-      };
-      reader.onerror = (e) => {
-        console.error('Error converting file to Data URL:', e);
-        reject(e);
-      };
-      reader.readAsDataURL(file);
-    });
-  },
-
-  async loadImageFromFile(file) {
-    console.log('Loading image from file:', { fileName: file.name, fileSize: file.size });
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        console.log('Image loaded with dimensions:', {
-          width: img.width,
-          height: img.height
-        });
-        resolve(img);
-      };
-      img.onerror = (error) => {
-        console.error('Error loading image:', error);
-        reject(error);
-      };
-      img.src = URL.createObjectURL(file);
-    });
-  },
-
   calculateCanvasDimensions(imageWidth, imageHeight, containerWidth, containerHeight) {
     console.log('Calculating canvas dimensions:', {
       imageWidth,
@@ -121,51 +86,129 @@ const ImageService = {
 };
 
 const ApiService = {
-  // Base URL for the Gadget API
-  baseUrl: 'https://blinds-in-my-home.gadget.app/api',
-
   async generatePreview(imageBlob, maskBlob, productId, variantId) {
     console.log('Starting preview generation:', {
       imageBlobSize: imageBlob.size,
       maskBlobSize: maskBlob.size,
       productId,
       variantId
+        });
+    // Convert blobs to base64
+    console.log('🔄 Converting images to base64...', {
+      customerImageSize: imageBlob.size,
+      maskImageSize: maskBlob.size
     });
 
-    const formData = new FormData();
-    formData.append('image', imageBlob);
-    formData.append('mask', maskBlob);
-    formData.append('productId', productId);
-    formData.append('variantId', variantId);
+    const [imageBase64, maskBase64] = await Promise.all([
+      this.blobToBase64(imageBlob),
+      this.blobToBase64(maskBlob)
+    ]);
 
-    console.log('Sending preview generation request to Gadget API');
+    console.log('✅ Images converted successfully', {
+      customerImageBase64Length: imageBase64.length,
+      maskImageBase64Length: maskBase64.length
+    });
+
+    // GraphQL mutation for generating product preview
+    const mutation = `
+      mutation GenerateProductPreview(
+        $customerImage: GenerateProductPreviewCustomerImageInput
+        $maskImage: GenerateProductPreviewMaskImageInput
+        $productId: String
+        $variantId: String
+      ) {
+        generateProductPreview(
+          customerImage: $customerImage
+          maskImage: $maskImage
+          productId: $productId
+          variantId: $variantId
+        ) {
+          success
+          errors {
+            message
+          }
+          result
+        }
+      }
+    `;
+
+    const variables = {
+      customerImage: {
+        buffer: imageBase64,
+        mimetype: imageBlob.type
+      },
+      maskImage: {
+        buffer: maskBase64,
+        mimetype: maskBlob.type
+      },
+      productId: productId,
+      variantId: variantId
+    };
+
     try {
-      const response = await fetch(`${this.baseUrl}/generateProductPreview`, {
+
+      const response = await fetch('https://blinds-in-my-home.gadget.app/api/graphql', {
         method: 'POST',
-        body: formData,
         headers: {
-          'Accept': 'application/json',
+          'Content-Type': 'application/json',
         },
-        credentials: 'include'
+        body: JSON.stringify({
+          query: mutation,
+          variables: variables
+        })
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Preview generation failed:', {
+        console.error('❌ Preview generation failed:', {
           status: response.status,
           statusText: response.statusText,
-          error: errorText
+          error: errorText,
         });
         throw new Error(`Failed to generate preview: ${response.statusText}`);
       }
 
+      console.log('✅ Received successful response from API');
       const result = await response.json();
-      console.log('Preview generated successfully:', result);
-      return result;
+
+      if (result.errors) {
+        console.error('❌ GraphQL errors received:', result.errors);
+        throw new Error(result.errors[0].message);
+      }
+
+      console.log('🎉 Preview generated successfully', {
+        success: result.data?.generateProductPreview?.success,
+        hasResult: !!result.data?.generateProductPreview?.result
+      });
+
+      return {
+        success: true,
+        imageUrl: result.data.generateProductPreview.result
+      };
+
     } catch (error) {
-      console.error('API request failed:', error);
-      throw new Error('Failed to generate preview: ' + (error.message || 'Network error'));
+      console.error('❌ Error in generatePreview:', {
+        error: error.message,
+        stack: error.stack,
+      });
+      return {
+        success: false,
+        error: error.message || 'Failed to generate preview'
+      };
     }
+  },
+
+   // Helper method to convert blob to base64
+   blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64String = reader.result.split(',')[1];
+        resolve(base64String);
+      };
+      reader.onerror = () => reject(new Error('Failed to convert image to base64'));
+      reader.readAsDataURL(blob);
+    });
   },
 
   async addToCart(variantId, quantity = 1) {
@@ -404,6 +447,13 @@ class CurtainVisualizer {
       fileSize: file.size 
     });
 
+    // Check file size (10MB = 10 * 1024 * 1024 bytes)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      throw new Error(`Image size (${sizeMB}MB) exceeds maximum allowed size of 10MB. Please upload a smaller image.`);
+    }
+
     let objectUrl = null;
     try {
       ImageService.originalImage = file;
@@ -517,52 +567,59 @@ class CurtainVisualizer {
   }
 
   async generatePreview() {
-    console.log('Generating preview');
-    const selections = this.fabricCanvas.getObjects().filter(obj => obj instanceof fabric.Rect);
-    if (selections.length === 0) {
-      console.log('No selections found');
-      alert('Please select at least one window area');
-      return;
-    }
-
-    this.step2.classList.add('hidden');
-    this.loadingState.classList.remove('hidden');
-
+    console.log('Starting preview generation process');
+    
     try {
-      const maskBlob = await ImageService.generateMask(this.fabricCanvas);
+      // Show loading state
+      this.confirmButton.disabled = true;
+      this.confirmButton.textContent = 'Generating...';
       
-      const formData = new FormData();
-      formData.append('image', ImageService.originalImage);
-      formData.append('mask', maskBlob);
-      formData.append('productId', this.productId);
-      formData.append('variantId', this.variantId);
-
-      try {
-        const response = await fetch('/api/generateProductPreview', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          console.error('Failed to generate preview:', response.status);
-          throw new Error('Failed to generate preview');
-        }
-
-        const result = await response.json();
-        this.resultImage.src = result.generatedImageUrl;
-        this.loadingState.classList.add('hidden');
-        this.step3.classList.remove('hidden');
-      } catch (error) {
-        console.error('Error generating preview:', error);
-        alert('Failed to generate preview. Please try again.');
-        this.loadingState.classList.add('hidden');
-        this.step2.classList.remove('hidden');
+      // Get the product ID and variant ID from the page
+      const productId = this.productId;
+      const variantId = this.variantId;
+      
+      if (!productId || !variantId) {
+        throw new Error('Product or variant ID not found');
       }
+
+      // Convert canvas to blob
+      const imageBlob = await new Promise((resolve) => {
+        const backgroundImage = this.fabricCanvas.backgroundImage;
+        if (!backgroundImage) {
+          throw new Error('No image uploaded');
+        }
+        const imageDataUrl = backgroundImage.canvas.toDataURL('image/png');
+        const binaryData = atob(imageDataUrl.split(',')[1]);
+        const array = [];
+        for (let i = 0; i < binaryData.length; i++) {
+          array.push(binaryData.charCodeAt(i));
+        }
+        const imageBlob = new Blob([new Uint8Array(array)], { type: 'image/png' });
+        resolve(imageBlob);
+      });
+
+      // Generate mask from selections
+      const maskBlob = await ImageService.generateMask(this.fabricCanvas);
+
+      // Call API to generate preview
+      const result = await ApiService.generatePreview(imageBlob, maskBlob, productId, variantId);
+      
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Failed to generate preview');
+      }
+
+      // Display the result
+      this.resultImage.src = result.imageUrl;
+      this.step2.classList.add('hidden');
+      this.step3.classList.remove('hidden');
+      
     } catch (error) {
-      console.error('Error preparing images:', error);
-      alert('Failed to prepare images. Please try again.');
-      this.loadingState.classList.add('hidden');
-      this.step2.classList.remove('hidden');
+      console.error('Preview generation failed:', error);
+      alert(error.message || 'Failed to generate preview. Please try again.');
+    } finally {
+      // Reset button state
+      this.confirmButton.disabled = false;
+      this.confirmButton.textContent = 'Generate Preview';
     }
   }
 
@@ -593,6 +650,8 @@ class CurtainVisualizer {
     }
   }
 }
+
+
 
 // Initialize when Fabric.js is loaded
 document.addEventListener('DOMContentLoaded', () => {
