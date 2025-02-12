@@ -145,9 +145,11 @@ const ApiService = {
       variantId: variantId
     };
 
+    console.log('graphql variables:', {variables: variables})
+
     try {
 
-      const response = await fetch('https://blinds-in-my-home.gadget.app/api/graphql', {
+      const response = await fetch('https://blinds-in-my-home--development.gadget.app/api/graphql', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

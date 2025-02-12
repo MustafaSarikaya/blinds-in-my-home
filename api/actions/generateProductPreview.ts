@@ -1,5 +1,3 @@
-import { createCanvas, loadImage } from 'canvas';
-
 // Type for base64 string validation
 type Base64String = string;
 
