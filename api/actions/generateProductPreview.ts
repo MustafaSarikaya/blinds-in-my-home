@@ -1,139 +1,113 @@
 import { createCanvas, loadImage } from 'canvas';
 
+// Type for base64 string validation
+type Base64String = string;
+
 // Define input parameter types
 interface GenerateProductPreviewParams {
   customerImage: {
-    buffer: Buffer;
+    buffer: Base64String;
     mimetype: string;
   };
   maskImage: {
-    buffer: Buffer;
+    buffer: Base64String;
     mimetype: string;
   };
   productId: string;
-  productTitle: string;
-  productDescription: string;
+  variantId: string;
 }
 
 // Constants
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const TARGET_WIDTH = 1080;
 const TIMEOUT = 30000; // 30 seconds
-const SUPPORTED_FORMATS = ['image/jpeg', 'image/png'];f
+const SUPPORTED_FORMATS = ['image/jpeg', 'image/png'];
 
-export const run: ActionRun = async ({ params, connections }) => {
-  const { customerImage, maskImage, productId, productTitle, productDescription } = params as GenerateProductPreviewParams;
+export const run: ActionRun = async ({ params, api, connections }) => {
+  const { customerImage, maskImage, productId, variantId } = params as GenerateProductPreviewParams;
 
   try {
-    // Validate input files
-    validateImage(customerImage);
-    validateImage(maskImage);
-
-    if (!productTitle || !productDescription) {
-      throw new Error('Product title and description are required');
+    // Validate base64 strings
+    if (!isBase64(customerImage.buffer)) {
+      throw new Error('Customer image is not a valid base64 string');
+    }
+    if (!isBase64(maskImage.buffer)) {
+      throw new Error('Mask image is not a valid base64 string');
     }
 
-    // Process images
-    const processedCustomerImage = await processImage(customerImage.buffer);
-    const processedMaskImage = await processImage(maskImage.buffer);
+    // Validate required fields
+    if (!productId || !variantId) {
+      throw new Error('Product ID and variant ID are required');
+    }
 
-    // Prepare prompt for realistic integration
-    const prompt = generatePrompt(productTitle, productDescription);
+    // Get product details from Shopify
+    const product = await api.shopifyProduct.findOne(productId, {
+      select: { body: true, title: true },
+    });
+
+    // Convert base64 to Buffers for DALL-E
+    const customerImageBuffer = Buffer.from(customerImage.buffer, 'base64');
+    const maskImageBuffer = Buffer.from(maskImage.buffer, 'base64');
+
+    // Generate prompt for DALL-E
+    const prompt = generatePrompt(product.title, product.body);
 
     // Set timeout for the OpenAI API call
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Request timed out')), TIMEOUT)
+      setTimeout(() => reject(new Error('OpenAI API timeout')), TIMEOUT)
     );
 
     // Make API call to DALL-E 2
     const imageResponse = await Promise.race([
       connections.openai.images.edit({
-        image: processedCustomerImage,
-        mask: processedMaskImage,
+        model: "dall-e-2",
+        image: customerImageBuffer, // DALL-E expects a PNG buffer
+        mask: maskImageBuffer,    // DALL-E expects a PNG buffer
         prompt: prompt,
         n: 1,
-        size: '1024x1024',
+        size: "1024x1024"
       }),
-      timeoutPromise,
+      timeoutPromise
     ]);
 
-    if (!('data' in imageResponse)) {
-      throw new Error('Failed to generate image');
-    }
+    console.log('Successfully generated image');
 
     return {
       success: true,
-      editedImage: imageResponse.data[0].url,
+      imageUrl: imageResponse.data[0].url
     };
 
-  } catch (error: any) {
+  } catch (error) {
+    console.error('Error generating product preview:', error);
     return {
       success: false,
-      error: error.message || 'An unexpected error occurred',
+      error: {
+        message: error.message || 'Failed to generate preview'
+      }
     };
   }
 };
 
 // Helper functions
-function validateImage(image: { buffer: Buffer; mimetype: string }) {
-  if (!image || !image.buffer) {
-    throw new Error('Image file is required');
-  }
-
-  if (image.buffer.length > MAX_FILE_SIZE) {
-    throw new Error('Image file size exceeds 5MB limit');
-  }
-
-  if (!SUPPORTED_FORMATS.includes(image.mimetype)) {
-    throw new Error('Unsupported image format. Please use JPEG or PNG');
-  }
-}
-
-async function processImage(imageBuffer: Buffer): Promise<Buffer> {
-  try {
-    // Create a data URL from the buffer
-    const dataUrl = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-    
-    // Load the image
-    const image = await loadImage(dataUrl);
-    
-    // Create a canvas with the image dimensions
-    const canvas = createCanvas(image.width, image.height);
-    const ctx = canvas.getContext('2d');
-    
-    // Draw the image onto the canvas
-    ctx.drawImage(image, 0, 0);
-    
-    // Resize if width is larger than target width while maintaining aspect ratio
-    if (image.width > TARGET_WIDTH) {
-      const newWidth = TARGET_WIDTH;
-      const newHeight = Math.floor(image.height * (newWidth / image.width));
-      const newCanvas = createCanvas(newWidth, newHeight);
-      const newCtx = newCanvas.getContext('2d');
-      newCtx.drawImage(canvas, 0, 0, newWidth, newHeight);
-      return newCanvas.toBuffer('image/png');
+// Validate if string is base64
+function isBase64(str: string): boolean {
+    try {
+      return btoa(atob(str)) === str;
+    } catch (err) {
+      return false;
     }
-
-    return canvas.toBuffer('image/png');
-  } catch (error) {
-    console.error('Error processing image:', error);
-    throw error;
   }
-}
 
-function generatePrompt(productTitle: string, productDescription: string): string {
+function generatePrompt(productTitle: string | null, productDescription: string | null): string {
   return `Create a highly realistic visualization of ${productTitle} in this space. 
-    The product should seamlessly blend with the existing environment while maintaining these specifications: ${productDescription}. 
+    The product should seamlessly blend with the existing environment while maintaining these specifications: ${productDescription ? productDescription : productTitle}. 
     Ensure natural lighting, proper perspective, and realistic shadows to match the original image's style.`;
 }
 
-// Define params schema
 export const params = {
   customerImage: {
     type: 'object',
     required: ['buffer', 'mimetype'],
     properties: {
-      buffer: { type: 'object' },
+      buffer: { type: 'string', pattern: '^[A-Za-z0-9+/=]+$' }, // base64 pattern
       mimetype: { type: 'string' },
     },
   },
@@ -141,11 +115,10 @@ export const params = {
     type: 'object',
     required: ['buffer', 'mimetype'],
     properties: {
-      buffer: { type: 'object' },
+      buffer: { type: 'string', pattern: '^[A-Za-z0-9+/=]+$' }, // base64 pattern
       mimetype: { type: 'string' },
     },
   },
   productId: { type: 'string' },
-  productTitle: { type: 'string' },
-  productDescription: { type: 'string' },
+  variantId: { type: 'string' }
 };
